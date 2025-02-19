@@ -80,6 +80,7 @@ pub struct PyClassPyO3Options {
     pub subclass: Option<kw::subclass>,
     pub unsendable: Option<kw::unsendable>,
     pub weakref: Option<kw::weakref>,
+    pub generic: Option<kw::generic>,
 }
 
 pub enum PyClassPyO3Option {
@@ -103,6 +104,7 @@ pub enum PyClassPyO3Option {
     Subclass(kw::subclass),
     Unsendable(kw::unsendable),
     Weakref(kw::weakref),
+    Generic(kw::generic),
 }
 
 impl Parse for PyClassPyO3Option {
@@ -148,7 +150,9 @@ impl Parse for PyClassPyO3Option {
             input.parse().map(PyClassPyO3Option::Unsendable)
         } else if lookahead.peek(attributes::kw::weakref) {
             input.parse().map(PyClassPyO3Option::Weakref)
-        } else {
+        } else if lookahead.peek(attributes::kw::generic) {
+            input.parse().map(PyClassPyO3Option::Generic)
+        }  else {
             Err(lookahead.error())
         }
     }
@@ -219,6 +223,7 @@ impl PyClassPyO3Options {
                 );
                 set_option!(weakref);
             }
+            PyClassPyO3Option::Generic(generic) => set_option!(generic),
         }
         Ok(())
     }
