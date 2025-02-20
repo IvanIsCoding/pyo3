@@ -716,7 +716,6 @@ fn test_unsendable_dict_with_weakref() {
 }
 
 #[pyclass(generic)]
-#[derive(PartialEq, Hash)]
 struct ClassWithRuntimeParametrization {
     value: usize,
 }
