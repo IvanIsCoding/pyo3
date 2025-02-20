@@ -421,6 +421,18 @@ fn impl_class(
         }
     }
 
+    let mut default_methods = descriptors_to_items(
+        cls,
+        args.options.rename_all.as_ref(),
+        args.options.frozen,
+        field_options,
+        ctx,
+    )?;
+
+    if let Some(default_class_geitem) = pyclass_class_geitem(&args.options, &syn::parse_quote!(#cls), ctx)? {
+        default_methods.push(default_class_geitem);
+    }
+
     let (default_str, default_str_slot) =
         implement_pyclass_str(&args.options, &syn::parse_quote!(#cls), ctx);
 
@@ -439,13 +451,7 @@ fn impl_class(
         cls,
         args,
         methods_type,
-        descriptors_to_items(
-            cls,
-            args.options.rename_all.as_ref(),
-            args.options.frozen,
-            field_options,
-            ctx,
-        )?,
+        default_methods,
         slots,
     )
     .doc(doc)
@@ -2025,6 +2031,41 @@ fn pyclass_hash(
             Ok((Some(hash_impl), Some(hash_slot)))
         }
         None => Ok((None, None)),
+    }
+}
+
+fn pyclass_class_geitem(
+    options: &PyClassPyO3Options,
+    cls: &syn::Type,
+    ctx: &Ctx,
+) -> Result<Option<MethodAndMethodDef>> {
+    let Ctx { pyo3_path, .. } = ctx;
+    match options.generic {
+        Some(opt) => {
+            let mut class_geitem_impl = parse_quote_spanned! { opt.span() =>
+                fn __pyo3__generated____hash__(&self) -> u64 {
+                    let mut s = ::std::collections::hash_map::DefaultHasher::new();
+                    ::std::hash::Hash::hash(self, &mut s);
+                    ::std::hash::Hasher::finish(&s)
+                }
+            };
+
+            let method = crate::pymethod::PyMethod::parse(sig, meth_attrs, options)?;
+            let spec = &method.spec;
+
+            let class_geitem_method_def = crate::pymethod::impl_py_method_def(
+                cls,
+                spec,
+                &spec.get_doc(meth_attrs, ctx),
+                Some(quote!(#pyo3_path::ffi::METH_CLASS)),
+                ctx,
+            ).unwrap();
+
+            let class_geitem_slot =
+                generate_protocol_slot(cls, &mut class_geitem_impl, &__HASH__, "__class_geitem__", ctx).unwrap();
+            Ok(Some(class_geitem_method_def))
+        }
+        None => Ok(None),
     }
 }
 
