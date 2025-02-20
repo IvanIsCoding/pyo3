@@ -2042,28 +2042,43 @@ fn pyclass_class_geitem(
     let Ctx { pyo3_path, .. } = ctx;
     match options.generic {
         Some(opt) => {
-            let mut class_geitem_impl = parse_quote_spanned! { opt.span() =>
-                fn __pyo3__generated____hash__(&self) -> u64 {
-                    let mut s = ::std::collections::hash_map::DefaultHasher::new();
-                    ::std::hash::Hash::hash(self, &mut s);
-                    ::std::hash::Hasher::finish(&s)
+            // NEW
+            let flags = Some(quote!(#pyo3_path::ffi::METH_CLASS));
+            let add_flags = flags.map(|flags| quote!(.flags(#flags)));
+            let methoddef_type = quote!(Class);
+
+            let wrapper_ident = format_ident!("__pymethod_get_{}__", spec.name);
+
+            let init_holders = holders.init_holders(ctx);
+            let associated_method = quote! {
+                #cfg_attrs
+                unsafe fn #wrapper_ident(
+                    py: #pyo3_path::Python<'_>,
+                    _slf: *mut #pyo3_path::ffi::PyObject
+                ) -> #pyo3_path::PyResult<*mut #pyo3_path::ffi::PyObject> {
+                    #init_holders
+                    let result = #body;
+                    result
                 }
             };
 
-            let method = crate::pymethod::PyMethod::parse(sig, meth_attrs, options)?;
-            let spec = &method.spec;
+            let method_def = quote! {
+                #cfg_attrs
+                #pyo3_path::impl_::pyclass::MaybeRuntimePyMethodDef::Static(
+                    #pyo3_path::impl_::pymethods::PyMethodDefType::Getter(
+                        #pyo3_path::impl_::pymethods::PyGetterDef::new(
+                            #python_name,
+                            #cls::#wrapper_ident,
+                            #doc
+                        )
+                    )
+                )
+            };
 
-            let class_geitem_method_def = crate::pymethod::impl_py_method_def(
-                cls,
-                spec,
-                &spec.get_doc(meth_attrs, ctx),
-                Some(quote!(#pyo3_path::ffi::METH_CLASS)),
-                ctx,
-            ).unwrap();
-
-            let class_geitem_slot =
-                generate_protocol_slot(cls, &mut class_geitem_impl, &__HASH__, "__class_geitem__", ctx).unwrap();
-            Ok(Some(class_geitem_method_def))
+            Ok(MethodAndMethodDef {
+                associated_method,
+                method_def,
+            })
         }
         None => Ok(None),
     }
