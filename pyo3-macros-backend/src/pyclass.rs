@@ -2041,7 +2041,7 @@ fn pyclass_class_geitem(
 ) -> Result<Option<MethodAndMethodDef>> {
     let Ctx { pyo3_path, .. } = ctx;
     match options.generic {
-        Some(opt) => {
+        Some(_) => {
             let ident = format_ident!("__class_getitem__");
             let mut match_args_impl: syn::ImplItemFn = {
                 parse_quote! {
@@ -2063,7 +2063,7 @@ fn pyclass_class_geitem(
             let class_geitem_method = crate::pymethod::impl_py_method_def(
                 cls,
                 &spec,
-                &spec.get_doc(meth_attrs, ctx),
+                &spec.get_doc(&match_args_impl.attrs, ctx),
                 Some(quote!(#pyo3_path::ffi::METH_CLASS)),
                 ctx,
             )?;
