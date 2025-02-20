@@ -2042,14 +2042,31 @@ fn pyclass_class_geitem(
     let Ctx { pyo3_path, .. } = ctx;
     match options.generic {
         Some(opt) => {
-            let class_geitem_method = match crate::pymethod::gen_py_method(cls)? {
-                crate::pymethod::GeneratedPyMethod::Method(m) => {
-                    m
-                },
-                _ => {
-                    panic!("pyclass_class_geitem should have generated a MethodAndMethodDef");
+            let ident = format_ident!("__class_getitem__");
+            let mut match_args_impl: syn::ImplItemFn = {
+                parse_quote! {
+                    #[classmethod]
+                    fn #ident(
+                        py: #pyo3_path::Python<'_>, cls: #pyo3_path::Bound<'_, #pyo3_path::types::PyAny>, key: #pyo3_path::Bound<'_, #pyo3_path::types::PyAny> 
+                    ) -> #pyo3_path::PyResult<#pyo3_path::Bound<'_, #pyo3_path::types::PyGenericAlias>> {
+                        #pyo3_path::types::PyGenericAlias::new(py, cls, key)
+                    }
                 }
             };
+
+            let spec = FnSpec::parse(
+                &mut match_args_impl.sig,
+                &mut match_args_impl.attrs,
+                Default::default(),
+            )?;
+
+            let class_geitem_method = crate::pymethod::impl_py_method_def(
+                cls,
+                &spec,
+                &spec.get_doc(meth_attrs, ctx),
+                Some(quote!(#pyo3_path::ffi::METH_CLASS)),
+                ctx,
+            )?;
             Ok(Some(class_geitem_method))
         }
         None => Ok(None),
